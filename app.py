@@ -8,8 +8,7 @@ reference_file = "All Permits with Details.xlsx"
 USERS = {
     "admin": {"password": "NOone@0", "role": "admin"},
     "user1": {"password": "M12345-", "role": "m_sadaa"},
-    "user2": {"password": "user234", "role": "user"},  
-    
+    "user2": {"password": "user234", "role": "user"},
 }
 
 # --- دالة تسجيل الدخول ---
@@ -65,10 +64,30 @@ if login():
     st.sidebar.write(f"🔑 الدور: **{role}**")
 
     if st.sidebar.button("تسجيل خروج"):
-        for key in ["logged_in", "username", "role", "password"]:
+        for key in ["logged_in", "username", "role", "password", "supervisor_name"]:
             if key in st.session_state:
                 del st.session_state[key]
         st.experimental_rerun()
+
+    # تهيئة supervisor_name في الجلسة
+    if "supervisor_name" not in st.session_state:
+        st.session_state["supervisor_name"] = ""
+
+    # اختيار المشرف مع زر تأكيد
+    selected_supervisor = st.selectbox("🧑‍💼 اسم المشرف", [""] + ["FaisalAl Anzi", "Mousa Al Khalifa", "Saud Al Khrisi", "Reham Al Otaibi"])
+
+    if st.button("تأكيد المشرف"):
+        if selected_supervisor != "":
+            st.session_state["supervisor_name"] = selected_supervisor
+            st.success(f"✅ تم اختيار المشرف: {selected_supervisor}")
+        else:
+            st.error("⚠️ الرجاء اختيار اسم المشرف")
+
+    supervisor_name = st.session_state["supervisor_name"]
+    if supervisor_name:
+        st.write(f"المشرف الحالي: **{supervisor_name}**")
+    else:
+        st.info("لم يتم اختيار مشرف بعد.")
 
     # تحميل بيانات الترخيص
     try:
@@ -104,8 +123,6 @@ if login():
         event_name = ""
         license_type = ""
         city = ""
-
-    supervisor_name = st.selectbox("🧑‍💼 اسم المشرف", ["FaisalAl Anzi", "Mousa Al Khalifa", "Saud Al Khrisi", "Reham Al Otaibi"])
 
     employee_names = [
         "Abdulaziz Al Qahtani", "Abdulaziz Al Dosari", "Abdulelah Al Daraan",
@@ -146,6 +163,7 @@ if login():
             "EventName": event_name,
             "LicenseType": license_type,
             "City": city,
+            "SupervisorName": supervisor_name,  # إضافة اسم المشرف هنا
             "EmployeeName": employee_name,
             "VisitDate": visit_date,
             "VisitStatus": visit_status,
