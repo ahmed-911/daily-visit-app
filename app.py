@@ -4,15 +4,23 @@ import io
 
 reference_file = "All Permits with Details.xlsx"
 
-# -- بيانات المستخدمين مع كلمات السر والصلاحيات --
 USERS = {
     "admin": {"password": "NOone@0", "role": "admin"},
     "user1": {"password": "M12345-", "role": "m_sadaa"},
-    "user2": {"password": "user234", "role": "user"},
+    "user2": {"password": "user234", "role": "user"},  
 }
 
-# --- دالة تسجيل الدخول ---
 def login():
+    # تهيئة القيم في session_state إذا غير موجودة
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
+    if "username" not in st.session_state:
+        st.session_state["username"] = ""
+    if "role" not in st.session_state:
+        st.session_state["role"] = ""
+    if "password" not in st.session_state:
+        st.session_state["password"] = ""
+
     def check_credentials():
         username = st.session_state.get("username")
         password = st.session_state.get("password")
@@ -25,11 +33,6 @@ def login():
             st.session_state["logged_in"] = False
             st.error("❌ اسم المستخدم أو كلمة المرور غير صحيحة")
 
-    if "logged_in" not in st.session_state:
-        st.session_state["logged_in"] = False
-        st.session_state["username"] = ""
-        st.session_state["role"] = ""
-
     if not st.session_state["logged_in"]:
         st.title("🔒 تسجيل الدخول")
         st.text_input("اسم المستخدم", key="username")
@@ -39,7 +42,6 @@ def login():
     else:
         return True
 
-# --- تحميل بيانات قاعدة الترخيص مع كاش لتحسين الأداء ---
 @st.cache_data
 def load_reference_data():
     cols_to_use = [3, 4, 7, 21]
@@ -48,15 +50,14 @@ def load_reference_data():
     df.columns = col_names
     return df
 
-# --- تحميل زيارات اليوم ---
 def load_visits():
     try:
         return pd.read_excel("daily visits.xlsx")
     except FileNotFoundError:
         return pd.DataFrame()
 
-# --- بدء التطبيق ---
 if login():
+    # الآن نضمن أن المتغيرات موجودة
     username = st.session_state["username"]
     role = st.session_state["role"]
 
@@ -64,32 +65,11 @@ if login():
     st.sidebar.write(f"🔑 الدور: **{role}**")
 
     if st.sidebar.button("تسجيل خروج"):
-        for key in ["logged_in", "username", "role", "password", "supervisor_name"]:
+        for key in ["logged_in", "username", "role", "password"]:
             if key in st.session_state:
                 del st.session_state[key]
         st.experimental_rerun()
 
-    # تهيئة supervisor_name في الجلسة
-    if "supervisor_name" not in st.session_state:
-        st.session_state["supervisor_name"] = ""
-
-    # اختيار المشرف مع زر تأكيد
-    selected_supervisor = st.selectbox("🧑‍💼 اسم المشرف", [""] + ["FaisalAl Anzi", "Mousa Al Khalifa", "Saud Al Khrisi", "Reham Al Otaibi"])
-
-    if st.button("تأكيد المشرف"):
-        if selected_supervisor != "":
-            st.session_state["supervisor_name"] = selected_supervisor
-            st.success(f"✅ تم اختيار المشرف: {selected_supervisor}")
-        else:
-            st.error("⚠️ الرجاء اختيار اسم المشرف")
-
-    supervisor_name = st.session_state["supervisor_name"]
-    if supervisor_name:
-        st.write(f"المشرف الحالي: **{supervisor_name}**")
-    else:
-        st.info("لم يتم اختيار مشرف بعد.")
-
-    # تحميل بيانات الترخيص
     try:
         db_df = load_reference_data()
     except FileNotFoundError:
@@ -123,6 +103,8 @@ if login():
         event_name = ""
         license_type = ""
         city = ""
+
+    supervisor_name = st.selectbox("🧑‍💼 اسم المشرف", ["FaisalAl Anzi", "Mousa Al Khalifa", "Saud Al Khrisi", "Reham Al Otaibi"])
 
     employee_names = [
         "Abdulaziz Al Qahtani", "Abdulaziz Al Dosari", "Abdulelah Al Daraan",
@@ -163,7 +145,6 @@ if login():
             "EventName": event_name,
             "LicenseType": license_type,
             "City": city,
-            "SupervisorName": supervisor_name,  # إضافة اسم المشرف هنا
             "EmployeeName": employee_name,
             "VisitDate": visit_date,
             "VisitStatus": visit_status,
@@ -181,7 +162,6 @@ if login():
         visits_df.to_excel("daily visits.xlsx", index=False)
         st.success("✅ تم حفظ بيانات الزيارة في ملف daily visits.xlsx")
 
-    # صلاحيات العرض والتنزيل فقط للمدير
     if role == "admin":
         if st.checkbox("📂 عرض زيارات اليوم"):
             visits_df = load_visits()
