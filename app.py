@@ -1,26 +1,20 @@
 import streamlit as st
 import pandas as pd
 import io
+import gspread
+from google.oauth2.service_account import Credentials
 
 reference_file = "All Permits with Details.xlsx"
 
+# -- بيانات المستخدمين مع كلمات السر والصلاحيات --
 USERS = {
     "admin": {"password": "NOone@0", "role": "admin"},
     "user1": {"password": "M12345-", "role": "m_sadaa"},
-    "user2": {"password": "user234", "role": "user"},  
+    "user2": {"password": "user234", "role": "user"},
 }
 
+# --- دالة تسجيل الدخول ---
 def login():
-    # تهيئة القيم في session_state إذا غير موجودة
-    if "logged_in" not in st.session_state:
-        st.session_state["logged_in"] = False
-    if "username" not in st.session_state:
-        st.session_state["username"] = ""
-    if "role" not in st.session_state:
-        st.session_state["role"] = ""
-    if "password" not in st.session_state:
-        st.session_state["password"] = ""
-
     def check_credentials():
         username = st.session_state.get("username")
         password = st.session_state.get("password")
@@ -33,6 +27,11 @@ def login():
             st.session_state["logged_in"] = False
             st.error("❌ اسم المستخدم أو كلمة المرور غير صحيحة")
 
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
+        st.session_state["username"] = ""
+        st.session_state["role"] = ""
+
     if not st.session_state["logged_in"]:
         st.title("🔒 تسجيل الدخول")
         st.text_input("اسم المستخدم", key="username")
@@ -42,6 +41,7 @@ def login():
     else:
         return True
 
+# --- تحميل بيانات الترخيص مع كاش لتحسين الأداء ---
 @st.cache_data
 def load_reference_data():
     cols_to_use = [3, 4, 7, 21]
@@ -50,14 +50,26 @@ def load_reference_data():
     df.columns = col_names
     return df
 
+# --- تحميل زيارات اليوم ---
 def load_visits():
     try:
         return pd.read_excel("daily visits.xlsx")
     except FileNotFoundError:
         return pd.DataFrame()
 
+# --- GOOGLE SHEETS INTEGRATION SETUP ---
+SERVICE_ACCOUNT_FILE = 'daily-visit-writer-xxxx.json'  # عدل هنا إلى اسم ملف JSON الخاص بك
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SPREADSHEET_NAME = 'اسم الشيت هنا'  # عدل إلى اسم Google Sheet الخاص بك
+
+@st.cache_resource
+def get_gs_client():
+    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    client = gspread.authorize(creds)
+    return client
+
+# --- بدء التطبيق ---
 if login():
-    # الآن نضمن أن المتغيرات موجودة
     username = st.session_state["username"]
     role = st.session_state["role"]
 
@@ -70,6 +82,7 @@ if login():
                 del st.session_state[key]
         st.experimental_rerun()
 
+    # تحميل بيانات الترخيص
     try:
         db_df = load_reference_data()
     except FileNotFoundError:
@@ -139,7 +152,7 @@ if login():
     visit_notes = st.selectbox("Visit Notes", options=visit_notes_options)
     general_notes = st.text_area("General Notes")
 
-    if st.button("💾 حفظ في ملف Daily Visits"):
+    if st.button("💾 حفظ في ملف Daily Visits و Google Sheets"):
         new_record = {
             "LicensedNumber": clean_licensed_number,
             "EventName": event_name,
@@ -153,6 +166,7 @@ if login():
             "GeneralNotes": general_notes
         }
 
+        # حفظ محلي (Excel)
         try:
             visits_df = pd.read_excel("daily visits.xlsx")
         except FileNotFoundError:
@@ -162,6 +176,28 @@ if login():
         visits_df.to_excel("daily visits.xlsx", index=False)
         st.success("✅ تم حفظ بيانات الزيارة في ملف daily visits.xlsx")
 
+        # إرسال إلى Google Sheets
+        try:
+            client = get_gs_client()
+            sheet = client.open(SPREADSHEET_NAME).sheet1
+            row = [
+                clean_licensed_number,
+                event_name,
+                license_type,
+                city,
+                employee_name,
+                visit_date.strftime("%Y-%m-%d"),
+                visit_status,
+                visit_purpose,
+                visit_notes,
+                general_notes
+            ]
+            sheet.append_row(row)
+            st.success("✅ تم حفظ بيانات الزيارة في Google Sheets بنجاح!")
+        except Exception as e:
+            st.error(f"❌ خطأ أثناء حفظ بيانات Google Sheets: {e}")
+
+    # صلاحيات العرض والتنزيل فقط للمدير
     if role == "admin":
         if st.checkbox("📂 عرض زيارات اليوم"):
             visits_df = load_visits()
